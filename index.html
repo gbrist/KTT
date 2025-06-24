@@ -1,0 +1,120 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kendall Toy Test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>.tile{transition:border-color 150ms ease}</style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-4">
+  <h1 class="text-2xl font-bold mb-4">Kendall Toy Test</h1>
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 w-full max-w-5xl">
+    <div>
+      <label for="condition" class="block mb-1 font-medium">Environment</label>
+      <select id="condition" class="w-full rounded border px-2 py-1">
+        <option value="">— select —</option>
+        <option>Quiet</option>
+        <option>Noise</option>
+      </select>
+    </div>
+    <div>
+      <label for="aided" class="block mb-1 font-medium">Aided / Unaided</label>
+      <select id="aided" class="w-full rounded border px-2 py-1">
+        <option value="">— select —</option>
+        <option>Aided</option>
+        <option>Unaided</option>
+      </select>
+    </div>
+    <div>
+      <label for="presentationLevel" class="block mb-1 font-medium">Presentation Level (dB)</label>
+      <input id="presentationLevel" type="text" class="w-full rounded border px-2 py-1" placeholder="e.g. 60" />
+    </div>
+    <div>
+      <label for="noiseLevel" class="block mb-1 font-medium">Noise Level (dB)</label>
+      <input id="noiseLevel" type="text" class="w-full rounded border px-2 py-1" placeholder="e.g. 50" />
+    </div>
+    <div>
+      <label for="itemsPresented" class="block mb-1 font-medium">Items Presented</label>
+      <input id="itemsPresented" type="number" min="1" max="15" value="15" class="w-full rounded border px-2 py-1" />
+    </div>
+  </div>
+  <p class="mt-6 text-lg">Click an image to toggle <span class="font-semibold">correct</span>.</p>
+  <div id="grid" class="grid grid-cols-3 sm:grid-cols-5 gap-4 mt-4 w-full max-w-5xl"></div>
+  <div id="scoreLine" class="mt-6 text-xl">Score: 0/15 (0%)</div>
+  <div class="flex gap-4 mt-4">
+    <button id="downloadBtn" class="px-4 py-2 bg-blue-600 text-white rounded shadow">Download PDF</button>
+    <button id="downloadGraphBtn" class="px-4 py-2 bg-emerald-600 text-white rounded shadow">Download PDF with Graph</button>
+  </div>
+  <canvas id="resultChart" width="400" height="300" class="hidden"></canvas>
+<script>
+  const TOTAL_ITEMS = 15;
+  const imageFilenames = [
+    'tree.png','car.png','Star.jpg','mouse.png','duck.png',
+    'horse.png','truck.jpg','fork.png','sheep.png','cow.png',
+    'house.png','ball.png','cup.png','bath.png','key.png'
+  ];
+  const selections = new Array(TOTAL_ITEMS).fill(false);
+  const grid = document.getElementById('grid');
+  imageFilenames.forEach((src, idx)=>{
+    const tile = document.createElement('div');
+    tile.className='tile border-4 border-transparent rounded cursor-pointer bg-white overflow-hidden select-none';
+    const img=document.createElement('img');
+    img.src='images/'+src;
+    img.alt=`Item ${idx+1}`;
+    img.className='object-contain w-full h-32';
+    tile.appendChild(img);
+    tile.addEventListener('click',()=>{
+      selections[idx]=!selections[idx];
+      tile.classList.toggle('border-green-500',selections[idx]);
+      updateScore();
+    });
+    grid.appendChild(tile);
+  });
+  function presentedCount(){return parseInt(document.getElementById('itemsPresented').value)||TOTAL_ITEMS;}
+  function correctCount(){return selections.filter(Boolean).length;}
+  function percent(){return ((correctCount()/presentedCount())*100).toFixed(1);}
+  function updateScore(){document.getElementById('scoreLine').textContent=`Score: ${correctCount()}/${presentedCount()} (${percent()}%)`;}
+  document.getElementById('itemsPresented').addEventListener('input',updateScore);
+  updateScore();
+  function pdfCommon(doc){
+    const cond=document.getElementById('condition').value||'—';
+    const aided=document.getElementById('aided').value||'—';
+    const pres=document.getElementById('presentationLevel').value||'—';
+    const noise=document.getElementById('noiseLevel').value||'—';
+    const presented=presentedCount();
+    const correct=correctCount();
+    const pct=percent();
+    doc.setFontSize(18);doc.text('Kendall Toy Test Results',14,22);
+    doc.setFontSize(12);
+    doc.text(`Environment: ${cond}`,14,32);
+    doc.text(`Aided/Unaided: ${aided}`,14,40);
+    doc.text(`Presentation Level: ${pres} dB`,14,48);
+    doc.text(`Noise Level: ${noise} dB`,14,56);
+    doc.text(`Items Presented: ${presented}`,14,64);
+    doc.text(`Score: ${correct}/${presented} (${pct}%)`,14,72);
+    return 84;
+  }
+  document.getElementById('downloadBtn').addEventListener('click',()=>{
+    const {jsPDF}=window.jspdf;const doc=new jsPDF();
+    let y=pdfCommon(doc);
+    selections.forEach((flag,i)=>{doc.text(`Item ${i+1}: ${flag?'✔':'✖'}`,14,y);y+=8;if(y>280&&i<selections.length-1){doc.addPage();y=20;}});
+    doc.save('KendallToyTest_Results.pdf');
+  });
+  document.getElementById('downloadGraphBtn').addEventListener('click',()=>{
+    const {jsPDF}=window.jspdf;const doc=new jsPDF();
+    const ctx=document.getElementById('resultChart').getContext('2d');
+    new Chart(ctx,{type:'bar',data:{labels:['Correct','Incorrect'],datasets:[{data:[correctCount(),presentedCount()-correctCount()],backgroundColor:['#10b981','#ef4444']}]},options:{responsive:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:presentedCount(),ticks:{stepSize:1}}}}});
+    setTimeout(()=>{
+      const imgData=document.getElementById('resultChart').toDataURL('image/png');
+      let y=pdfCommon(doc);
+      doc.addImage(imgData,'PNG',14,y,180,90);
+      doc.save('KendallToyTest_withGraph.pdf');
+    },200);
+  });
+</script>
+</body>
+</html>
